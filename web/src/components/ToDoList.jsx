@@ -2,7 +2,7 @@
 /**
  * ToDoList — Module Focus Quotidien
  * Liste de tâches avec priorité + Pomodoro intégré par tâche.
- * Toute mutation est envoyée au backend Python via window.eel.
+ * Toute mutation est envoyée au backend Python via window.pywebview.api.
  */
 const PRIORITIES = [
     { value: 'high',   label: 'Haute' },
@@ -17,26 +17,26 @@ const ToDoList = ({ tasks, onUpdate }) => {
     const handleAdd = async (e) => {
         e.preventDefault();
         if (!title.trim()) return;
-        const data = await window.eel.add_task(title, priority)();
+        const data = await window.pywebview.api.add_task(title, priority);
         onUpdate(data);
         setTitle('');
         setPriority('medium');
     };
 
     const toggleComplete = async (task) => {
-        const data = await window.eel.update_task(task.id, {
+        const data = await window.pywebview.api.update_task(task.id, {
             completed: !task.completed,
-        })();
+        });
         onUpdate(data);
     };
 
     const remove = async (taskId) => {
-        const data = await window.eel.delete_task(taskId)();
+        const data = await window.pywebview.api.delete_task(taskId);
         onUpdate(data);
     };
 
     const accumulate = async (taskId, seconds) => {
-        const data = await window.eel.add_task_time(taskId, seconds)();
+        const data = await window.pywebview.api.add_task_time(taskId, seconds);
         onUpdate(data);
     };
 

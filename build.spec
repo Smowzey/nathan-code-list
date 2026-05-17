@@ -5,23 +5,35 @@ Spec PyInstaller pour Nathan Code List.
 Build local :
     pyinstaller build.spec
 
-Produit `dist/NathanCodeList.exe` — exécutable portable unique.
+Produit `dist/NathanCodeList.exe` — exécutable portable unique,
+utilisant pywebview + WebView2 (vraie fenêtre desktop native).
 """
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-# Bundle l'intégralité du dossier `web/` (index.html, css, jsx, vendor)
+# Bundle l'intégralité du dossier `web/` (html, css, jsx, vendor)
 datas = [('web', 'web')]
-datas += collect_data_files('eel')  # eel.js et autres assets internes
+
+# Bundle les assets internes de pywebview (WebView2Loader.dll, etc.)
+datas += collect_data_files('webview')
+
+# Imports cachés : pywebview charge dynamiquement les backends de plateforme
+hiddenimports = collect_submodules('webview')
+hiddenimports += [
+    'webview.platforms.winforms',
+    'webview.platforms.edgechromium',
+    'clr_loader',
+    'pythonnet',
+]
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
     datas=datas,
-    hiddenimports=['bottle_websocket', 'eel'],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -53,5 +65,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,               # ajouter 'web/icon.ico' si tu fais une icône
+    icon=None,
 )

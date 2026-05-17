@@ -74,7 +74,7 @@ const ProjectMatrix = ({ projects, onUpdate }) => {
     const addProject = async (e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        const data = await window.eel.add_project(name, client, status, description)();
+        const data = await window.pywebview.api.add_project(name, client, status, description);
         onUpdate(data);
         setName('');
         setClient('');
@@ -83,12 +83,12 @@ const ProjectMatrix = ({ projects, onUpdate }) => {
     };
 
     const moveProject = async (projectId, newStatus) => {
-        const data = await window.eel.update_project(projectId, { status: newStatus })();
+        const data = await window.pywebview.api.update_project(projectId, { status: newStatus });
         onUpdate(data);
     };
 
     const deleteProject = async (projectId) => {
-        const data = await window.eel.delete_project(projectId)();
+        const data = await window.pywebview.api.delete_project(projectId);
         onUpdate(data);
     };
 

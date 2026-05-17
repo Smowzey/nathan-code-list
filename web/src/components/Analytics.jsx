@@ -135,7 +135,7 @@ const Gauge = ({ label, value, goal, color, onGoalChange }) => {
 const Analytics = ({ prospection, productivity, onUpdate }) => {
     const stepProspection = async (key, delta) => {
         const next = Math.max(0, (prospection[key] || 0) + delta);
-        const data = await window.eel.update_prospection({ [key]: next })();
+        const data = await window.pywebview.api.update_prospection({ [key]: next });
         onUpdate(data);
     };
 
@@ -143,14 +143,14 @@ const Analytics = ({ prospection, productivity, onUpdate }) => {
         const patch = {};
         patch[key] = Math.max(0, seconds);
         // mutation directe via save_data
-        const full = await window.eel.get_data()();
+        const full = await window.pywebview.api.get_data();
         full.productivity = { ...full.productivity, ...patch };
-        const data = await window.eel.save_data(full)();
+        const data = await window.pywebview.api.save_data(full);
         onUpdate(data);
     };
 
     const addProspectTime = async (delta) => {
-        const data = await window.eel.add_prospection_time(delta)();
+        const data = await window.pywebview.api.add_prospection_time(delta);
         onUpdate(data);
     };
 

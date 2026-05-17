@@ -1,18 +1,20 @@
 """
 Nathan Code List - Centre de commandement freelance
-Backend Python avec Eel : sert l'interface web et gère le stockage JSON.
+Backend Python avec pywebview : vraie fenêtre desktop native (WebView2).
 
 Compatible exécution directe (`python main.py`) et exécutable PyInstaller
 (--onefile). Le fichier data.json est stocké dans %APPDATA%/NathanCodeList
 pour persister entre les mises à jour de l'application.
 """
 
-import eel
 import json
 import os
 import sys
 import uuid
 from datetime import datetime, date
+
+import webview
+
 
 # ----------------------------------------------------------------------
 # Résolution des chemins (dev + PyInstaller --onefile)
@@ -33,7 +35,7 @@ def _user_data_dir() -> str:
 
 
 BUNDLE_DIR = _bundle_root()
-WEB_DIR = os.path.join(BUNDLE_DIR, "web")
+INDEX_FILE = os.path.join(BUNDLE_DIR, "web", "index.html")
 DATA_FILE = os.path.join(_user_data_dir(), "data.json")
 
 DEFAULT_DATA = {
@@ -45,10 +47,10 @@ DEFAULT_DATA = {
         "meetings": 0,
     },
     "productivity": {
-        "codeTime": 0,            # secondes accumulées aujourd'hui
-        "prospectionTime": 0,     # secondes accumulées aujourd'hui
-        "dailyGoalCode": 14400,   # 4h en secondes
-        "dailyGoalProspection": 3600,  # 1h en secondes
+        "codeTime": 0,
+        "prospectionTime": 0,
+        "dailyGoalCode": 14400,
+        "dailyGoalProspection": 3600,
         "lastReset": str(date.today()),
     },
     "projects": [],
@@ -60,7 +62,6 @@ DEFAULT_DATA = {
 # Persistance JSON
 # ----------------------------------------------------------------------
 def _ensure_data_file() -> None:
-    """Crée data.json avec les valeurs par défaut s'il n'existe pas."""
     if not os.path.exists(DATA_FILE):
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_DATA, f, indent=2, ensure_ascii=False)
@@ -71,7 +72,7 @@ def _read() -> dict:
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Fusion défensive : si une clé manque (ancienne version), on la rajoute.
+    # Fusion défensive
     for key, value in DEFAULT_DATA.items():
         if key not in data:
             data[key] = value
@@ -80,7 +81,7 @@ def _read() -> dict:
                 if sub_k not in data[key]:
                     data[key][sub_k] = sub_v
 
-    # Reset journalier des compteurs de productivité.
+    # Reset journalier
     today = str(date.today())
     if data["productivity"].get("lastReset") != today:
         data["history"].append({
@@ -102,154 +103,123 @@ def _write(data: dict) -> None:
 
 
 # ----------------------------------------------------------------------
-# API exposée à React via Eel
+# API exposée à React via pywebview (window.pywebview.api.*)
 # ----------------------------------------------------------------------
-@eel.expose
-def get_data() -> dict:
-    return _read()
+class Api:
+    # ---------- Lecture / écriture brute ----------
+    def get_data(self) -> dict:
+        return _read()
 
+    def save_data(self, data: dict) -> dict:
+        _write(data)
+        return data
 
-@eel.expose
-def save_data(data: dict) -> dict:
-    _write(data)
-    return data
+    # ---------- Tâches ----------
+    def add_task(self, title: str, priority: str = "medium") -> dict:
+        data = _read()
+        data["tasks"].append({
+            "id": str(uuid.uuid4()),
+            "title": (title or "").strip(),
+            "priority": priority,
+            "completed": False,
+            "timeSpent": 0,
+            "createdAt": datetime.now().isoformat(timespec="seconds"),
+        })
+        _write(data)
+        return data
 
+    def update_task(self, task_id: str, patch: dict) -> dict:
+        data = _read()
+        for t in data["tasks"]:
+            if t["id"] == task_id:
+                t.update(patch)
+                break
+        _write(data)
+        return data
 
-# ---------- Tâches ----------
-@eel.expose
-def add_task(title: str, priority: str = "medium") -> dict:
-    data = _read()
-    task = {
-        "id": str(uuid.uuid4()),
-        "title": title.strip(),
-        "priority": priority,
-        "completed": False,
-        "timeSpent": 0,
-        "createdAt": datetime.now().isoformat(timespec="seconds"),
-    }
-    data["tasks"].append(task)
-    _write(data)
-    return data
-
-
-@eel.expose
-def update_task(task_id: str, patch: dict) -> dict:
-    data = _read()
-    for t in data["tasks"]:
-        if t["id"] == task_id:
-            t.update(patch)
-            break
-    _write(data)
-    return data
-
-
-@eel.expose
-def add_task_time(task_id: str, seconds: int) -> dict:
-    data = _read()
-    for t in data["tasks"]:
-        if t["id"] == task_id:
-            t["timeSpent"] = t.get("timeSpent", 0) + int(seconds)
-            break
-    data["productivity"]["codeTime"] = (
-        data["productivity"].get("codeTime", 0) + int(seconds)
-    )
-    _write(data)
-    return data
-
-
-@eel.expose
-def delete_task(task_id: str) -> dict:
-    data = _read()
-    data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
-    _write(data)
-    return data
-
-
-# ---------- Prospection ----------
-@eel.expose
-def update_prospection(patch: dict) -> dict:
-    data = _read()
-    data["prospection"].update(patch)
-    _write(data)
-    return data
-
-
-@eel.expose
-def add_prospection_time(seconds: int) -> dict:
-    data = _read()
-    data["productivity"]["prospectionTime"] = (
-        data["productivity"].get("prospectionTime", 0) + int(seconds)
-    )
-    _write(data)
-    return data
-
-
-# ---------- Projets ----------
-@eel.expose
-def add_project(name: str, client: str = "", status: str = "prospect",
-                description: str = "") -> dict:
-    data = _read()
-    project = {
-        "id": str(uuid.uuid4()),
-        "name": name.strip(),
-        "client": client.strip(),
-        "status": status,
-        "description": description.strip(),
-        "createdAt": datetime.now().isoformat(timespec="seconds"),
-    }
-    data["projects"].append(project)
-    _write(data)
-    return data
-
-
-@eel.expose
-def update_project(project_id: str, patch: dict) -> dict:
-    data = _read()
-    for p in data["projects"]:
-        if p["id"] == project_id:
-            p.update(patch)
-            break
-    _write(data)
-    return data
-
-
-@eel.expose
-def delete_project(project_id: str) -> dict:
-    data = _read()
-    data["projects"] = [p for p in data["projects"] if p["id"] != project_id]
-    _write(data)
-    return data
-
-
-# ----------------------------------------------------------------------
-# Bootstrap : tentative Chrome → Edge → navigateur par défaut
-# ----------------------------------------------------------------------
-def _start(mode: str) -> bool:
-    """Tente de lancer Eel dans un mode donné. Retourne True si lancé."""
-    try:
-        eel.start(
-            "index.html",
-            size=(1400, 900),
-            position=(80, 40),
-            mode=mode,
+    def add_task_time(self, task_id: str, seconds: int) -> dict:
+        data = _read()
+        for t in data["tasks"]:
+            if t["id"] == task_id:
+                t["timeSpent"] = t.get("timeSpent", 0) + int(seconds)
+                break
+        data["productivity"]["codeTime"] = (
+            data["productivity"].get("codeTime", 0) + int(seconds)
         )
-        return True
-    except (SystemExit, KeyboardInterrupt):
-        return True  # fermeture normale par l'utilisateur
-    except Exception:
-        return False
+        _write(data)
+        return data
+
+    def delete_task(self, task_id: str) -> dict:
+        data = _read()
+        data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
+        _write(data)
+        return data
+
+    # ---------- Prospection ----------
+    def update_prospection(self, patch: dict) -> dict:
+        data = _read()
+        data["prospection"].update(patch)
+        _write(data)
+        return data
+
+    def add_prospection_time(self, seconds: int) -> dict:
+        data = _read()
+        data["productivity"]["prospectionTime"] = (
+            data["productivity"].get("prospectionTime", 0) + int(seconds)
+        )
+        _write(data)
+        return data
+
+    # ---------- Projets ----------
+    def add_project(self, name: str, client: str = "",
+                    status: str = "prospect", description: str = "") -> dict:
+        data = _read()
+        data["projects"].append({
+            "id": str(uuid.uuid4()),
+            "name": (name or "").strip(),
+            "client": (client or "").strip(),
+            "status": status,
+            "description": (description or "").strip(),
+            "createdAt": datetime.now().isoformat(timespec="seconds"),
+        })
+        _write(data)
+        return data
+
+    def update_project(self, project_id: str, patch: dict) -> dict:
+        data = _read()
+        for p in data["projects"]:
+            if p["id"] == project_id:
+                p.update(patch)
+                break
+        _write(data)
+        return data
+
+    def delete_project(self, project_id: str) -> dict:
+        data = _read()
+        data["projects"] = [p for p in data["projects"] if p["id"] != project_id]
+        _write(data)
+        return data
 
 
+# ----------------------------------------------------------------------
+# Bootstrap : crée une vraie fenêtre native (WebView2 sur Windows 11)
+# ----------------------------------------------------------------------
 def main() -> None:
     _ensure_data_file()
-    eel.init(WEB_DIR)
 
-    for mode in ("chrome", "edge", "default"):
-        if _start(mode):
-            return
-
-    print("Impossible de lancer un navigateur — aucun de chrome/edge/default n'est disponible.")
-    sys.exit(1)
+    webview.create_window(
+        title="Nathan Code List",
+        url=INDEX_FILE,
+        js_api=Api(),
+        width=1400,
+        height=900,
+        x=80,
+        y=40,
+        min_size=(1000, 700),
+        background_color="#E0F3E1",  # cohérent avec le light mode au boot
+    )
+    # gui="edgechromium" → WebView2 (livré avec Windows 10/11, aucune install)
+    webview.start(gui="edgechromium", debug=False)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 /* global React, ReactDOM, ToDoList, Analytics, ProjectMatrix */
 /**
  * App — coquille principale Nathan Code List.
- * Charge l'état depuis Python (window.eel.get_data) puis route entre
- * les trois modules.
+ * Charge l'état depuis Python (window.pywebview.api.get_data) puis route
+ * entre les trois modules.
  */
 const MODULES = [
     {
@@ -58,11 +58,14 @@ const App = () => {
 
     React.useEffect(() => {
         const boot = async () => {
-            if (!window.eel) {
-                console.error("Eel n'est pas chargé — lance bien `python main.py`");
-                return;
+            // pywebview injecte window.pywebview.api après le chargement.
+            // On attend l'événement `pywebviewready` si ce n'est pas encore prêt.
+            if (!window.pywebview || !window.pywebview.api) {
+                await new Promise((resolve) => {
+                    window.addEventListener('pywebviewready', resolve, { once: true });
+                });
             }
-            const initial = await window.eel.get_data()();
+            const initial = await window.pywebview.api.get_data();
             setData(initial);
         };
         boot();
