@@ -1,0 +1,23 @@
+# Données locales (ne doivent JAMAIS être commitées)
+data.json
+
+# Build PyInstaller
+build/
+dist/
+*.spec.bak
+__pycache__/
+*.pyc
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
