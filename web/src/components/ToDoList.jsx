@@ -10,7 +10,8 @@ const PRIORITIES = [
     { value: 'low',    label: 'Basse' },
 ];
 
-const ToDoList = ({ tasks, onUpdate }) => {
+const ToDoList = ({ tasks, onUpdate, pomodoros,
+                    onPomodoroStart, onPomodoroPause, onPomodoroReset }) => {
     const [title, setTitle] = React.useState('');
     const [priority, setPriority] = React.useState('medium');
 
@@ -32,11 +33,6 @@ const ToDoList = ({ tasks, onUpdate }) => {
 
     const remove = async (taskId) => {
         const data = await window.pywebview.api.delete_task(taskId);
-        onUpdate(data);
-    };
-
-    const accumulate = async (taskId, seconds) => {
-        const data = await window.pywebview.api.add_task_time(taskId, seconds);
         onUpdate(data);
     };
 
@@ -105,7 +101,10 @@ const ToDoList = ({ tasks, onUpdate }) => {
                             <PomodoroTimer
                                 taskId={task.id}
                                 accumulatedSeconds={task.timeSpent || 0}
-                                onAccumulate={accumulate}
+                                session={pomodoros[task.id]}
+                                onStart={onPomodoroStart}
+                                onPause={onPomodoroPause}
+                                onReset={onPomodoroReset}
                             />
                             <button
                                 className="btn btn--icon btn--danger"

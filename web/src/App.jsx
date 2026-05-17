@@ -3,6 +3,10 @@
  * App — coquille principale Nathan Code List.
  * Charge l'état depuis Python (window.pywebview.api.get_data) puis route
  * entre les trois modules.
+ *
+ * L'état du Pomodoro est conservé ici (et pas dans `PomodoroTimer`) pour
+ * survivre aux changements de module : démonter/remonter le composant
+ * ne réinitialise plus le chrono en cours.
  */
 const MODULES = [
     {
@@ -56,20 +60,81 @@ const App = () => {
     const [data, setData] = React.useState(null);
     const [active, setActive] = React.useState('focus');
 
+    // pomodoros : map { [taskId]: { accumulatedMs, runStartAt } }
+    //   - runStartAt = timestamp ms → la session tourne
+    //   - runStartAt = null         → la session est en pause
+    //   - clé absente               → pas de session sur cette tâche
+    // Plusieurs tâches peuvent tourner en parallèle.
+    const [pomodoros, setPomodoros] = React.useState({});
+
     React.useEffect(() => {
+        // pywebview peut avoir déjà fini d'injecter window.pywebview.api avant
+        // que Babel ait transpilé ce composant. On poll plutôt que d'écouter
+        // l'événement `pywebviewready` (qui peut avoir été émis trop tôt).
+        const waitForApi = () => new Promise((resolve) => {
+            const check = () => {
+                if (window.pywebview && window.pywebview.api
+                    && window.pywebview.api.get_data) {
+                    resolve();
+                } else {
+                    setTimeout(check, 50);
+                }
+            };
+            check();
+        });
+
         const boot = async () => {
-            // pywebview injecte window.pywebview.api après le chargement.
-            // On attend l'événement `pywebviewready` si ce n'est pas encore prêt.
-            if (!window.pywebview || !window.pywebview.api) {
-                await new Promise((resolve) => {
-                    window.addEventListener('pywebviewready', resolve, { once: true });
-                });
-            }
+            await waitForApi();
             const initial = await window.pywebview.api.get_data();
             setData(initial);
         };
         boot();
     }, []);
+
+    // ---- Helpers Pomodoro (multi-timer) ----
+    const startPomodoro = (taskId) => {
+        setPomodoros((prev) => {
+            const existing = prev[taskId];
+            return {
+                ...prev,
+                [taskId]: {
+                    accumulatedMs: existing ? existing.accumulatedMs : 0,
+                    runStartAt: Date.now(),
+                },
+            };
+        });
+    };
+
+    const pausePomodoro = (taskId) => {
+        setPomodoros((prev) => {
+            const p = prev[taskId];
+            if (!p || !p.runStartAt) return prev;
+            return {
+                ...prev,
+                [taskId]: {
+                    accumulatedMs: p.accumulatedMs + (Date.now() - p.runStartAt),
+                    runStartAt: null,
+                },
+            };
+        });
+    };
+
+    const resetPomodoro = async (taskId) => {
+        const p = pomodoros[taskId];
+        if (!p) return;
+        const totalMs = p.accumulatedMs
+            + (p.runStartAt ? Date.now() - p.runStartAt : 0);
+        const seconds = Math.floor(totalMs / 1000);
+        if (seconds > 0) {
+            const updated = await window.pywebview.api.add_task_time(taskId, seconds);
+            setData(updated);
+        }
+        setPomodoros((prev) => {
+            const next = { ...prev };
+            delete next[taskId];
+            return next;
+        });
+    };
 
     if (!data) {
         return <div className="loading">Chargement…</div>;
@@ -87,7 +152,14 @@ const App = () => {
                 </header>
 
                 {active === 'focus' && (
-                    <ToDoList tasks={data.tasks} onUpdate={setData} />
+                    <ToDoList
+                        tasks={data.tasks}
+                        onUpdate={setData}
+                        pomodoros={pomodoros}
+                        onPomodoroStart={startPomodoro}
+                        onPomodoroPause={pausePomodoro}
+                        onPomodoroReset={resetPomodoro}
+                    />
                 )}
                 {active === 'analytics' && (
                     <Analytics

@@ -219,7 +219,8 @@ def main() -> None:
         background_color="#E0F3E1",  # cohérent avec le light mode au boot
     )
     # gui="edgechromium" → WebView2 (livré avec Windows 10/11, aucune install)
-    webview.start(gui="edgechromium", debug=False)
+    # debug=True → DevTools accessibles via F12 / clic droit → Inspecter
+    webview.start(gui="edgechromium", debug=True)
 
 
 if __name__ == "__main__":
