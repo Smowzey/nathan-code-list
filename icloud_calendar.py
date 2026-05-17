@@ -14,14 +14,47 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import pytz
+
 
 ICLOUD_URL = "https://caldav.icloud.com/"
+_UTC = pytz.UTC
 
 
 def _ensure_aware(dt: datetime) -> datetime:
+    """Renvoie un datetime aware en UTC (pytz), compatible avec vobject."""
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+        return _UTC.localize(dt)
+    return dt.astimezone(_UTC)
+
+
+def _read_reminder(vevent) -> int | None:
+    """Renvoie le rappel en minutes avant l'événement, ou None si absent."""
+    alarms = vevent.contents.get("valarm", [])
+    if not alarms:
+        return None
+    try:
+        trigger = alarms[0].trigger.value
+    except Exception:
+        return None
+    if isinstance(trigger, timedelta):
+        # Négatif = avant l'événement → on renvoie une valeur positive en minutes
+        total_minutes = int(round(-trigger.total_seconds() / 60))
+        return total_minutes if total_minutes >= 0 else None
+    return None
+
+
+def _set_reminder(vevent, minutes_before: int | None) -> None:
+    """Remplace les VALARM existants par un seul rappel (ou aucun)."""
+    # Supprime les VALARM existants
+    if "valarm" in vevent.contents:
+        del vevent.contents["valarm"]
+    if minutes_before is None:
+        return
+    valarm = vevent.add("valarm")
+    valarm.add("action").value = "DISPLAY"
+    valarm.add("trigger").value = timedelta(minutes=-int(minutes_before))
+    valarm.add("description").value = "Rappel"
 
 
 def _parse_iso(value: str) -> datetime:
@@ -160,6 +193,7 @@ def _serialize_event(item) -> list[dict]:
             "start": start_iso,
             "end": end_iso,
             "allDay": all_day,
+            "reminderMinutes": _read_reminder(ve),
             "href": getattr(item, "url", None) and str(item.url) or "",
         })
     return out
@@ -174,6 +208,7 @@ def create_event(
     description: str = "",
     location: str = "",
     calendar_name: str | None = None,
+    reminder_minutes: int | None = None,
 ) -> dict:
     """Crée un VEVENT. Retourne l'objet sérialisé."""
     try:
@@ -198,11 +233,12 @@ def create_event(
     vevent.add("summary").value = title or "(sans titre)"
     vevent.add("dtstart").value = start
     vevent.add("dtend").value = end
-    vevent.add("dtstamp").value = datetime.now(timezone.utc)
+    vevent.add("dtstamp").value = datetime.now(_UTC)
     if description:
         vevent.add("description").value = description
     if location:
         vevent.add("location").value = location
+    _set_reminder(vevent, reminder_minutes)
 
     try:
         cal.save_event(vcal.serialize())
@@ -217,6 +253,7 @@ def create_event(
         "start": start.isoformat(),
         "end": end.isoformat(),
         "allDay": False,
+        "reminderMinutes": reminder_minutes,
     }
 
 
@@ -268,6 +305,9 @@ def update_event(
         vevent.dtstart.value = _parse_iso(patch["start"])
     if "end" in patch and patch["end"]:
         vevent.dtend.value = _parse_iso(patch["end"])
+    if "reminderMinutes" in patch:
+        rm = patch["reminderMinutes"]
+        _set_reminder(vevent, None if rm in (None, "") else int(rm))
 
     try:
         target.data = vobj.serialize()

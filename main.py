@@ -305,11 +305,13 @@ class Api:
         end_iso: str,
         description: str = "",
         location: str = "",
+        reminder_minutes=None,
     ) -> dict:
         data = _read()
         cal = data.get("calendar", {})
         if not cal.get("connected"):
             return {"ok": False, "error": "Calendrier non connecté."}
+        rm = None if reminder_minutes in (None, "") else int(reminder_minutes)
         try:
             event = icloud_calendar.create_event(
                 cal["appleId"],
@@ -320,6 +322,7 @@ class Api:
                 description,
                 location,
                 cal.get("calendarName") or None,
+                reminder_minutes=rm,
             )
         except icloud_calendar.CalendarError as exc:
             return {"ok": False, "error": str(exc)}
@@ -373,12 +376,11 @@ def main() -> None:
         height=900,
         x=80,
         y=40,
-        min_size=(1000, 700),
+        min_size=(640, 520),
         background_color="#E0F3E1",  # cohérent avec le light mode au boot
     )
     # gui="edgechromium" → WebView2 (livré avec Windows 10/11, aucune install)
-    # debug=True → DevTools accessibles via F12 / clic droit → Inspecter
-    webview.start(gui="edgechromium", debug=True)
+    webview.start(gui="edgechromium", debug=False)
 
 
 if __name__ == "__main__":

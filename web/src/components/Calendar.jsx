@@ -10,6 +10,25 @@
  */
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+const REMINDER_OPTIONS = [
+    { value: '',     label: 'Aucun rappel' },
+    { value: 0,      label: 'À l\'heure de l\'événement' },
+    { value: 5,      label: '5 minutes avant' },
+    { value: 15,     label: '15 minutes avant' },
+    { value: 30,     label: '30 minutes avant' },
+    { value: 60,     label: '1 heure avant' },
+    { value: 120,    label: '2 heures avant' },
+    { value: 1440,   label: '1 jour avant' },
+    { value: 2880,   label: '2 jours avant' },
+    { value: 10080,  label: '1 semaine avant' },
+];
+
+const reminderLabel = (mins) => {
+    if (mins === null || mins === undefined) return null;
+    const opt = REMINDER_OPTIONS.find((o) => o.value === mins);
+    return opt ? opt.label : `${mins} min avant`;
+};
 const MONTHS = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
     'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
@@ -136,6 +155,10 @@ const EventForm = ({ initial, onSave, onCancel, onDelete }) => {
     });
     const [location, setLocation] = React.useState(initial?.location || '');
     const [description, setDescription] = React.useState(initial?.description || '');
+    const [reminder, setReminder] = React.useState(() => {
+        const r = initial?.reminderMinutes;
+        return r === null || r === undefined ? '' : r;
+    });
     const [saving, setSaving] = React.useState(false);
     const [error, setError] = React.useState('');
 
@@ -158,6 +181,7 @@ const EventForm = ({ initial, onSave, onCancel, onDelete }) => {
                 end: endD.toISOString(),
                 location: location.trim(),
                 description: description.trim(),
+                reminderMinutes: reminder === '' ? null : Number(reminder),
             });
         } catch (err) {
             setError(err.message || 'Erreur');
@@ -212,6 +236,18 @@ const EventForm = ({ initial, onSave, onCancel, onDelete }) => {
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
                         />
+                    </label>
+                    <label>
+                        Rappel
+                        <select
+                            className="select"
+                            value={reminder}
+                            onChange={(e) => setReminder(e.target.value)}
+                        >
+                            {REMINDER_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
                     </label>
                     <label>
                         Description (optionnel)
@@ -294,6 +330,11 @@ const WeekView = ({ events, onEventClick }) => {
                                     <span className="event-pill__title">{ev.title}</span>
                                     {ev.calendar && (
                                         <span className="event-pill__cal">{ev.calendar}</span>
+                                    )}
+                                    {ev.reminderMinutes !== null && ev.reminderMinutes !== undefined && (
+                                        <span className="event-pill__bell" title={reminderLabel(ev.reminderMinutes)}>
+                                            🔔
+                                        </span>
                                     )}
                                     {ev.location && (
                                         <span className="event-pill__location">{ev.location}</span>
@@ -422,6 +463,7 @@ const Calendar = ({ calendarMeta, onMetaUpdate }) => {
                 payload.end,
                 payload.description,
                 payload.location,
+                payload.reminderMinutes,
             );
         }
         if (!res.ok) throw new Error(res.error || 'Erreur iCloud');
