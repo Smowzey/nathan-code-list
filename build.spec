@@ -21,11 +21,20 @@ datas += collect_data_files('webview')
 
 # Imports cachés : pywebview charge dynamiquement les backends de plateforme
 hiddenimports = collect_submodules('webview')
+hiddenimports += collect_submodules('caldav')
+hiddenimports += collect_submodules('vobject')
+hiddenimports += collect_submodules('icalendar')
 hiddenimports += [
     'webview.platforms.winforms',
     'webview.platforms.edgechromium',
     'clr_loader',
     'pythonnet',
+    'openpyxl',
+    'caldav',
+    'vobject',
+    'icalendar',
+    'lxml',
+    'lxml.etree',
 ]
 
 a = Analysis(
