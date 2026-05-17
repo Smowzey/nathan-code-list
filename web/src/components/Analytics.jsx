@@ -214,6 +214,8 @@ const Analytics = ({ prospection, productivity, onUpdate }) => {
                             Objectif : {Math.round((productivity.dailyGoalProspection || 0) / 60)} min
                         </span>
                         <div className="kpi__editor">
+                            <button className="btn btn--ghost" onClick={() => addProspectTime(-15 * 60)}>−15 min</button>
+                            <button className="btn btn--ghost" onClick={() => addProspectTime(-30 * 60)}>−30 min</button>
                             <button className="btn btn--ghost" onClick={() => addProspectTime(15 * 60)}>+15 min</button>
                             <button className="btn btn--ghost" onClick={() => addProspectTime(30 * 60)}>+30 min</button>
                             <input

@@ -1,4 +1,4 @@
-/* global React, ReactDOM, ToDoList, Analytics, ProjectMatrix */
+/* global React, ReactDOM, ToDoList, Analytics, ProjectMatrix, Calendar */
 /**
  * App — coquille principale Nathan Code List.
  * Charge l'état depuis Python (window.pywebview.api.get_data) puis route
@@ -29,6 +29,13 @@ const MODULES = [
         icon: '◰',
         title: 'Matrice des projets',
         subtitle: 'Pipeline visuel de tes missions, du premier contact à la livraison.',
+    },
+    {
+        key: 'calendar',
+        label: 'Calendrier',
+        icon: '▤',
+        title: 'Calendrier iCloud',
+        subtitle: 'Tes événements iPhone, en direct via iCloud — création et édition synchronisées.',
     },
 ];
 
@@ -170,6 +177,12 @@ const App = () => {
                 )}
                 {active === 'projects' && (
                     <ProjectMatrix projects={data.projects} onUpdate={setData} />
+                )}
+                {active === 'calendar' && (
+                    <Calendar
+                        calendarMeta={data.calendar}
+                        onMetaUpdate={(meta) => setData({ ...data, calendar: meta })}
+                    />
                 )}
             </main>
         </div>

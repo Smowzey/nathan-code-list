@@ -27,6 +27,10 @@ hiddenimports += [
     'clr_loader',
     'pythonnet',
 ]
+# Calendrier iCloud (CalDAV)
+hiddenimports += collect_submodules('caldav')
+hiddenimports += collect_submodules('vobject')
+hiddenimports += ['icalendar', 'recurring_ical_events', 'lxml._elementpath']
 
 a = Analysis(
     ['main.py'],
